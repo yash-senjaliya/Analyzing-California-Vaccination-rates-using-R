@@ -1,0 +1,589 @@
+---
+title: "Fall 2021 - Final Examination"
+author: "Yash Senjaliya"
+output: pdf_document
+---
+
+# Instructions
+
+_Your goal for this final exam is to conduct the necessary analyses of vaccination rates in California schools and school districts and then write up a technical report for a scientifically knowledgeable staff member in a California state legislator’s office. You should provide sufficient numeric and graphical detail that the staff member can create a comprehensive briefing for a legislator (see question 7 for specific points of interest). You can assume that the staff member understands the concept of statistical significance and other basic concepts like mean, standard deviation, and correlation, so you do not need to define those. _ 
+
+_For this exam, the report writing is very important: Your responses will be graded on the basis of clarity; conciseness; inclusion and explanation of specific and appropriate statistical values; inclusion of both frequentist and Bayesian inferential evidence (i.e., it is not sufficient to just examine the data and say what you see); explanation of any included tabular material and the appropriate use of graphical displays when/if necessary. It is also important to conduct a thorough analysis, including both data exploration and cleaning and appropriate diagnostics. Bonus points will be awarded for work that goes above expectations._
+
+_In your answer for each question, make sure you write a narrative with complete sentences that answers the substantive question. Please place the answers in the text (not R comments) after the relevant analysis. You can choose to put important statistical values into a table for readability, or you can include the statistics within your narrative. Be sure that you not only report what a test result was, but also what that result means substantively for the question you are answering. Please keep your answers concise and focused on the question asked. Make sure to include enough statistical information so that another analytics professional could review your work. Your report can include graphics created by R, keeping in mind that if you do include a graphic, you will have to provide some accompanying narrative text to explain what it is doing in your report. Finally, be sure to proofread your final knitted submission to ensure that everything is included and readable (e.g., that the code does not run off the edge of the page)._
+
+_You *may not* receive assistance, help, coaching, guidance, or support from any human except your instructor at any point during this exam. Obtaining improper assistance will result in a 0 for this exam. Your instructor will be available by email throughout the report writing period if you have questions, but don’t wait until the last minute!_ 
+
+## Data
+
+_You have a personalized RData file available on Blackboard area that contains two data sets that pertain to vaccinations for the U.S. as a whole and for Californian school districts. The U.S. vaccine data is a time series and the California data is a sample of end-of-year vaccination reports from n=700 school districts. Here is a description of the datasets:_
+
+usVaccines – Time series data from the World Health Organization reporting vaccination rates in the U.S. for five common vaccines
+
+```{ eval=FALSE}
+Time-Series [1:38, 1:5] from 1980 to 2017: 
+ - attr(*, "dimnames")=List of 2
+  ..$ : NULL
+  ..$ : chr [1:5] "DTP1" "HepB_BD" "Pol3" "Hib3" “MCV1”... 
+```
+
+_(Note: DTP1 = First dose of Diphtheria/Pertussis/Tetanus vaccine (i.e., DTP); HepB_BD = Hepatitis B, Birth Dose (HepB); Pol3 = Polio third dose (Polio); Hib3 – Influenza third dose; MCV1 = Measles first dose (included in MMR))_ 
+
+districts – A sample of California public school districts from the 2017 data collection, along with specific numbers and percentages for each district: 
+
+```{ eval=FALSE}
+'data.frame':	700 obs. of  14 variables:
+ $ DistrictName    : Name of the district
+ $ WithDTP         : Percentage of students in the district with the DTP vaccine
+ $ WithPolio       : Percentage of students in the district with the Polio vaccine
+ $ WithMMR         : Percentage of students in the district with the MMR vaccine
+ $ WithHepB        : Percentage of students in the district with Hepatitis B vaccine
+ $ PctUpToDate     : Percentage of students with completely up-to-date vaccines
+ $ DistrictComplete: Boolean showing whether or not district’s reporting was complete
+ $ PctBeliefExempt : Percentage of all enrolled students with belief exceptions
+ $ PctMedicalExempt: Percentage of all enrolled students with medical exceptions
+ $ PctChildPoverty : Percentage of children in district living below the poverty line
+ $ PctFamilyPoverty: Percentage of families in district living below the poverty line
+ $ PctFreeMeal     : Percentage of students in the district receiving free or reduced cost meals
+ $ Enrolled        : Total number of enrolled students in the district
+ $ TotalSchools    : Total number of different schools in the district
+```
+
+_As might be expected, the data are quite skewed: districts range from 1 to 582 schools enrolling from 10 to more than 50,000 students (NB. your sample may be slightly different). Further, while most districts have low rates of missing vaccinations, a handful are quite high. Be sure to note problems the data cause for the analysis and address any problems you can. Note that the data are about districts, not individual students, so be careful that you do not commit an ecological fallacy by stating conclusions about individuals. _
+
+_In addition, you will find on Blackboard a CSV file, All Schools.csv, with data about 7,381 individual schools._
+
+```{r eval=FALSE}
+'data.frame' 7,381 obs. of 18 variables:
+ $ SCHOOL CODE              : School ID number 
+ $ PUBLIC/ PRIVATE          : School status, "PUBLIC" or "PRIVATE" (note the space in the variable name: you can access it as `PUBLIC/ PRIVATE`)
+ $ Public School District ID: School district ID (only if public)
+ $ PUBLIC SCHOOL DISTRICT   : School district name (only if public)
+ $ CITY                     : City name
+ $ COUNTY                   : Country name
+ $ SCHOOL NAME              : School name
+ $ ENROLLMENT               : Total number of enrolled students in the school
+ $ UP_TO_DATE               : Number of students with completely up-to-date vaccines
+ $ CONDITIONAL              : Number of students missing some vaccine without an exemption
+ $ PME                      : Number of students with a medical exemption
+ $ PBE_BETA                 : Number of students with a personal belief exemption
+ $ DTP                      : Number of students in the district with the DTP vaccine
+ $ POLIO                    : Number of students in the district with the Polio vaccine
+ $ MMR                      : Number of students in the district with the MMR vaccine
+ $ HEPB                     : Number of students in the district with Hepatitis B vaccine
+ $ VARICELLA                : Number of students in the district with Varicella vaccine
+ $ REPORTED                 : Whether the school reported vaccination data (Y or N)
+```
+
+
+# Descriptive Reporting
+
+## 1.	_Basic Introductory Paragraph_
+
+_In your own words, write about three sentences of introduction addressing the staff member in the state legislator’s office. Frame the problem/topic that your report addresses._
+
+_This analysis aims to compare vaccination rate in USA to the vaccination rate of sample collected in california schools in recent years. It aims to understand whether a significant change is observed between vaccination rates in USA and in california schools. We try to understand whether the given factors available in dataset can explain the difference in vaccination rates within counties, if observed._
+
+
+# Loading data and Libraries
+
+```{r}
+#loading all the libraries here used in analysis 
+library(tidyverse)
+library(dlookr)
+library(tseries)
+library(visdat)
+library("BayesFactor")
+library(ggplot2) 
+library(car)
+library(MCMCpack)
+library(changepoint)
+
+#loading data files
+All_Schools <- read_csv(file = '/Users/yashsenjaliya/Desktop/IST 772/Final/All Schools.csv')
+load("/Users/yashsenjaliya/Desktop/IST 772/Final/datasets20(2).RData")
+
+```
+# Understanding Datasets 
+
+```{r}
+#running summary()
+summary(All_Schools)
+
+```
+_It can be seen that All_school dataset have 7381 observation and 18 features. There are 5 features with character values while remaining are numeric._
+
+
+```{r}
+summary(districts)
+```
+_district dataset is a sample of 700 observation and have 14 variables._
+
+```{r}
+summary(usVaccines)
+
+```
+_It is a time series data of 5 different vaccines of past 38 years._
+
+
+# Preparing subsets
+
+_This portion of code creates all the subsets of data required for analysis. For convenience and readability of code, it is put together._
+```{r}
+#subset of All_Schools with numeric columns
+All_Schools_numeric<-All_Schools[,-c(1,2,3,4,5,6,7,18)]
+
+#subset of districts with numeric columns
+districts_numeric<-districts[,-c(1,7)]
+districts_numeric_vaccine<-districts_numeric[,c(1:4)]
+
+#subset of All_school with only public school
+public_school<-All_Schools[All_Schools$`PUBLIC/ PRIVATE`=="PUBLIC",]
+
+#subset of All_school with only private school
+private_school<-All_Schools[All_Schools$`PUBLIC/ PRIVATE`=="PRIVATE",]
+
+#subset of All_school whith reported data
+reported_all_school<-All_Schools[All_Schools$REPORTED=="Y",]
+
+#subset of All_school whit numeric data except county and reported
+all_school_num_with_reported<-All_Schools[,-c(1,2,3,4,5,7)]
+
+#usVaccine to data frame
+usVacc<-as.data.frame(usVaccines)
+
+```
+
+# Testing datasets
+```{r}
+diagnose_outlier(districts)
+diagnose_outlier(All_Schools)
+
+#plotting outliers
+plot_outlier(districts)
+plot_outlier(All_Schools)
+
+#checking null values
+vis_miss(All_Schools)
+vis_miss(districts)
+
+#checking skewness
+sapply(districts_numeric, skewness) 
+sapply(All_Schools_numeric, skewness)
+
+```
+_All_school have about 4.2% of missing data. Many columns with reported N status have these null values. There are about 399 schools who have not reported vaccination values._
+
+_District has missing values in only 1 column i.e. PctFreemeal. About 2.4% of of data is missing in the dataset._
+
+_It can be observed that columns in All_district dataset have high skewness and hence requires transformation. Transformation will be carried out at later stage of analysis._ 
+
+
+## 2.	_Descriptive Overview of U.S. Vaccinations_
+
+_You have U.S. vaccination data going back 38 years, but the staff member is only interested in recent vaccination rates as a basis of comparison with California schools._ 
+
+```{r}
+#Considering only last 7 years
+recent_years<-window(usVaccines,start=2011)
+```
+_Considering past 7 years as significant to compare it with california school. 7 years should be sufficient to consider any trend. With an assumption of decade wise comaprison, I am considering all the years in the given decade._
+
+
+### a.	_How have U.S. vaccination rates varied over time? _
+```{r}
+#plotting all years time series data
+plot.ts(usVaccines)
+
+#plotting in same plane
+usVacc$Year <- 1979 + seq.int(nrow(usVacc))
+ggplot(usVacc, aes(x=Year)) +
+geom_line(aes(y=DTP1), colour="blue") + geom_line(aes(y=HepB_BD), colour="black") + geom_line(aes(y=Pol3), colour="red") + geom_line(aes(y=Hib3), colour="green") + geom_line(aes(y=MCV1), colour="pink")
+
+#plotting diff series
+diff_usVaccine<- diff(usVaccines)
+plot(diff_usVaccine)
+```
+
+_It can be observed that there were drastic change in vaccination levels for each vaccine in late 1980s. However in recent years, it has stabilized. Some downward trend can be observed for Hepatitis B vaccine in recent years._  
+  
+### b.	_Are there notable trends or cyclical variation in U.S. vaccination rates?_
+```{r}
+#performing acf test on all columns
+sapply(usVaccines,acf)
+```
+_Performing ACF test to know how well the present value of the series is related with its past values._
+_Trend can be observed in DTP1 and Hep_BD during early years. However, based on the plots it can be observed that vaccine rates are stationary in recent years._
+
+
+```{r}
+#performing adf test on all columns
+sapply(usVaccines,adf.test)
+```
+_ADF test is performed to reconfirm the inference from acf test. From, the results it can be seen that all the vaccines rate are stationary._
+  
+### c.	_What are the mean U.S. vaccination rates when including only recent years in the calculation of the mean (examine your answers to the previous question to decide what a reasonable recent period is, i.e., a period during which the rates are relatively constant)?_
+```{r}
+cpmean1 <- cpt.mean(usVacc$DTP1)
+plot(cpmean1)
+cpmean2 <- cpt.mean(usVacc$HepB_BD)
+plot(cpmean2)
+cpmean3 <- cpt.mean(usVacc$Pol3)
+plot(cpmean3)
+cpmean4 <- cpt.mean(usVacc$Hib3)
+plot(cpmean4)
+cpmean5 <- cpt.mean(usVacc$MCV1)
+plot(cpmean5)
+sapply(recent_years,mean)
+```
+_ANSWER :_
+_For DTP1, mean in recent years has gone up_
+_HepB_BD,mean in recent years has gone up_
+_Pol3, mean in recent years has gone up marginally_
+_Hib3,mean in recent years has gone up_ 
+_MCV1,mean in recent years has gone down_
+
+
+  
+## 3.	_Descriptive Overview of California Vaccinations_
+
+_Your districts dataset contains four variables that capture the individual vaccination rates by district: WithDTP, WithPolio, WithMMR, and WithHepB._
+
+### a.	_What are the mean levels of these variables across districts?_ 
+
+```{r}
+
+sampleDistri<-replicate(1000,mean(sample(districts_numeric$WithDTP, size = 50,replace = TRUE)))
+histogram<-hist(sampleDistri)
+abline(v=quantile(sampleDistri, probs=0.025),col="orange")
+abline(v=quantile(sampleDistri, probs=0.975),col="blue")
+mean(districts_numeric_vaccine$WithDTP)
+```
+
+_Confidence interval for dtp vaccine rate ranged approximately between 86 to 92. Assuming no biases in measurement or sampling, about 95 out of the 100 constructed intervals would contain the true dtp mean value level._ 
+
+```{r}
+sampleDistri2<-replicate(1000,mean(sample(districts_numeric$WithPolio, size = 50,replace = TRUE)))
+histogram<-hist(sampleDistri2)
+abline(v=quantile(sampleDistri2, probs=0.025),col="orange")
+abline(v=quantile(sampleDistri2, probs=0.975),col="blue")
+mean(districts_numeric_vaccine$WithPolio)
+```
+  
+_Confidence interval for polio vaccine rate ranged approximately between 87 to 93. Assuming no biases in measurement or sampling, about 95 out of the 100 constructed intervals would contain the true polio mean value level._ 
+
+  
+```{r}
+sampleDistri3<-replicate(1000,mean(sample(districts_numeric$WithMMR, size = 50,replace = TRUE)))
+histogram<-hist(sampleDistri3)
+abline(v=quantile(sampleDistri3, probs=0.025),col="orange")
+abline(v=quantile(sampleDistri3, probs=0.975),col="blue")
+mean(districts_numeric_vaccine$WithMMR)
+```
+ _Confidence interval for MMR vaccine rate ranged approximately between 86 to 92.5. Assuming no biases in measurement or sampling, about 95 out of the 100 constructed intervals would contain the true MMR mean value level._ 
+ 
+```{r}
+sampleDistri4<-replicate(1000,mean(sample(districts_numeric$WithHepB, size = 50,replace = TRUE)))
+histogram<-hist(sampleDistri4)
+abline(v=quantile(sampleDistri4, probs=0.025),col="orange")
+abline(v=quantile(sampleDistri4, probs=0.975),col="blue")
+mean(districts_numeric_vaccine$WithHepB)
+```
+
+_Confidence interval for HepB vaccine rate ranged approximately between 87 to 94. Assuming no biases in measurement or sampling, about 95 out of the 100 constructed intervals would contain the true HepB mean value level._ 
+
+
+  
+### b.	_Among districts, how are the vaccination rates for individual vaccines related? In other words, if there are students with one vaccine, are students likely to have all of the others?_
+```{r}
+cor(districts_numeric_vaccine)
+
+```
+_The correlation matrix shows a high positive correlation between each vaccines. It means that the likelihood of a student having all vaccines is very high._  
+
+
+  
+### c.	_How do these Californian vaccination levels compare to U.S. vaccination levels (recent years only)? Note any patterns you notice and run any appropriate statistical tests. _ 
+```{r}
+dist_vaccine<-usVacc[,-c(4,6)]
+dist_vaccine<-tail(dist_vaccine, 7)
+comp<-data.frame(as.data.frame(sapply(districts_numeric_vaccine,mean)), as.data.frame(sapply(dist_vaccine,mean)))
+colnames(comp)[1]<-"California State"
+colnames(comp)[2]<-"Overall US Rate, Recent years"
+
+comp
+```
+_Vaccination rate in california state for all vaccine is more or less the same and consistent. However, polio vaccination rate for entire country  is drastically less._
+
+## 4. _Comparison of public and private schools (i.e., from the All Schools data)_ 
+
+### a. _What proportion of public schools reported vaccination data?_
+```{r}
+pub_school_repo_ratio<-nrow(public_school[public_school$REPORTED=="Y",])/nrow(public_school)
+pub_school_repo_ratio
+
+```
+_About 97.41 % of public school reported vaccination data._
+
+### b. _What proportion of private schools reported vaccination data?_   
+```{r}
+private_school_repo_ratio<-nrow(private_school[private_school$REPORTED=="Y",])/nrow(private_school)
+private_school_repo_ratio
+```
+_About 84.72% of private school reported vaccination data. It gives intuition that vaccination rate in private schools are less than that of public school. To confirm this hypothesis, CHI- Square test can be performed._
+
+
+### c. _Was there any credible difference in reporting between public and private schools?_  
+```{r}
+#Preparing data for chi-square test
+chi_data<-data.frame(sample(public_school$REPORTED,1649,replace = FALSE), private_school$REPORTED)
+#renaming columns
+colnames(chi_data)[1]<-"public"
+colnames(chi_data)[2]<-"private"
+#converting data frame into table format
+chi_data_table<-table(chi_data$public,chi_data$private)
+```
+
+
+```{r}
+#Frequentest approach
+chisq.test(chi_data_table)
+```
+
+_Pearson’s Chi-squared test was performed to test the whether vaccination rates in private school has any relation with vaccination rates in public school. The Null hypothesis for the above test is that there is no relationship between vaccination rates of each group. The test gave Chi-sqaured value of 2.8975. The degree of freedom is 1. It is because only one value can vary as marginal total are fixed. The P-value for the above test is 0.08872 which is above our alpha value of 0.05. Hence, we fail to reject the null hypothesis. So, it is safe to say that there is no relationship between vaccination rates of each group._
+
+
+```{r}
+
+#Bayesian approach
+ctbf<-contingencyTableBF(chi_data_table,sampleType = "poisson")
+summary(ctbf)
+```
+
+_Bayes factor analysis was performed and the Bayes Factor for the given test is 0.03135546. Low bayes factor value is not in favor of alternative hypothesis that there is a relationship between vaccination rates of each group. It favors our above test._ 
+
+
+```{r}
+ctbf2<-contingencyTableBF(chi_data_table, sampleType = "poisson", posterior = "TRUE", iteration=1000)
+summary(ctbf2)
+
+N<- ctbf2[,"lambda[1,1]"]/ctbf2[,"lambda[2,1]"]
+Y<- ctbf2[,"lambda[1,2]"]/ctbf2[,"lambda[2,2]"]
+Diff <- N-Y
+
+hist(Diff)
+abline(v = quantile(Diff,probs=c(0.025, 0.975)),col = c("Green","red"))
+
+quantile(Diff,0.025)
+quantile(Diff,0.975)
+
+#WEEK 8
+```
+
+_Bayesian analysis with posterior sampling was performed with 10000 iterations. Results shows us Empirical mean and standard deviation for each variable, and standard error of the mean. Subsequent results shows us HDI values._ 
+_Histogram shows us the posterior distribution of differences in proportions between vaccination rates of each group. It can be seen that HDI does contain zero and it gives us strength to infer that there exist no relation between vaccination rates of each group._
+
+### d. _Does the proportion of students with up-to-data vaccinations vary from county to county?_
+
+```{r}
+#Duplicating All_school Data
+school2<-All_Schools
+school2[is.na(school2)] = 1
+#aggregating based on county
+aggregate_data<-aggregate(school2$UP_TO_DATE ~ COUNTY+REPORTED, school2, sum)
+colnames(aggregate_data)[3]<-"total"
+colnames(aggregate_data)[2]<-"Reported"
+
+#subset of aggregate_data with reported =Y
+aggregate_data_yes<-aggregate_data[aggregate_data$Reported=="Y",]
+colnames(aggregate_data_yes)[3]<-"total"
+
+
+#Calculating total in each county
+aggregate_data_total<-aggregate(aggregate_data$total ~ COUNTY, aggregate_data, sum)
+colnames(aggregate_data_total)[2]<-"total"
+
+
+#calculating ratio
+ratio<-aggregate_data_yes$total/aggregate_data_total$total
+ratio_DF<-data.frame(aggregate_data_yes$COUNTY,ratio)
+barplot(ratio_DF$ratio)
+```
+_ANSWER : _
+_To find proportion of students with up-to-data vaccination, ratio of total people in each county with reported status yes to total people in each county was calculated._ 
+
+_From the bar plot, it can be inferred that all the counties have more or less the same ratio. Hence, the proportion in each county is almost same._ 
+
+_ANOVA could have been performed to get the better idea about difference in proportion rates in each county if elaborated data about vaccination rates over period of time was made availabe._
+
+
+## 5.	_Conclusion Paragraph for Vaccination Rates_
+
+_Provide one or two sentences of your professional judgment about where California school districts stand with respect to vaccination rates and in the larger context of the U.S._
+
+_Vaccination rate in US is better in recent years when compared to california school sample except polio vaccine. However numerically, difference in means is not vast. For polio, the national average is quite low when compared to california or even national average of other vaccines. The reason behind such low rate can be a intresting find. HepB vaccination rate sis best in california when comapred with others. So, similar approch can be applied to vaccinate people that was applied for Hep B in california schools._ 
+
+
+
+
+# 6. _Inferential reporting about districts_
+
+_For every item below except question c, use PctChildPoverty, PctFamilyPoverty, Enrolled, and TotalSchools as the four predictors. Explore the data and transform variables as necessary to improve prediction and/or interpretability. Be sure to include appropriate diagnostics and modify your analyses as appropriate. _ 
+
+_Because of high skewness observed and for better functionality in regression analysis, data columns needed to be transformed._
+_total schools and total students enrolled columns show skewness and so were logarithmic transformation was applied_
+_percent values of the vaccines showed left skewness, therefore they were converted to proportions to asin transform them to reduce the skewness._
+
+```{r}
+#transformation
+copy_district <- districts 
+
+copy_district$PctUpToDate[copy_district$PctUpToDate>100] <- copy_district$PctUpToDate[copy_district$PctUpToDate>100]-100
+
+copy_district$log_TotalSchools <- log(copy_district$TotalSchools) 
+copy_district$log_enrolled <- log(copy_district$Enrolled)
+copy_district$sqrt_PctBeliefExempt <- sqrt(copy_district$PctBeliefExempt) 
+copy_district$prop_PCTUpToDate <- copy_district$PctUpToDate/100 
+copy_district$asin_PCTUpToDate <- asin(copy_district$prop_PCTUpToDate)
+copy_district$prop_WithHepB <- (copy_district$WithHepB)/100 
+copy_district$asin_WithHepB <- asin(copy_district$prop_WithHepB) 
+
+copy_district$prop_WithDTP <- copy_district$WithDTP/100 
+copy_district$asin_WithDTP <- asin(copy_district$prop_WithDTP)
+copy_district$prop_WithMMR <- (copy_district$WithMMR)/100
+copy_district$asin_WithMMR <- asin(copy_district$prop_WithMMR) 
+copy_district$prop_WithPolio <- copy_district$WithPolio/100 
+copy_district$asin_WithPolio <- asin(copy_district$prop_WithPolio)
+
+```
+
+
+### a. _Which of the four predictor variables predicts the percentage of all enrolled students with belief exceptions?_
+
+```{r}
+
+LM_belief <-lm(PctBeliefExempt ~ PctChildPoverty+PctFamilyPoverty+log_enrolled+log_TotalSchools , data=copy_district)
+summary(LM_belief)
+plot(LM_belief,which=2)
+
+LM_belief_bayes <- lmBF(PctBeliefExempt ~ PctChildPoverty+PctFamilyPoverty+ log_enrolled+log_TotalSchools , data=copy_district, posterior=TRUE, iterations=10000)
+summary(LM_belief_bayes)
+
+
+check_list <- 1 - (LM_belief_bayes[,"sig2"] / var(copy_district$PctBeliefExempt) )
+mean(check_list)
+quantile(check_list, c(0.025,0.975))
+hist(check_list, main=NULL)
+abline(v=quantile(check_list,c(0.025,0.975)), col="red")
+
+```
+
+_The P-value for above regression is less than alpha threshold and hence it is statistically significant. However, the adjusted R Square value is low at 0.07584. So, only 7% of the variability of students with belief exemption is explained by this variables._
+
+_Results from Bayesian approach favored the results from frequentest approach. Predictors are unable to explain variability in the percent of students who are exempted from the vaccines due to their beliefs. Among, these predictors log_enrolled seems to be the good predictor._   
+
+### b. _Which of the four predictor variables predicts the percentage of all enrolled students with completely up-to-date vaccines?_
+```{r}
+LM_up_to_date <-lm(asin_PCTUpToDate ~ PctChildPoverty+PctFamilyPoverty+ log_enrolled+log_TotalSchools , data=copy_district)
+plot(LM_up_to_date, which= 2)
+summary(LM_up_to_date)
+
+LM_up_to_date_Bayes <- lmBF(asin_PCTUpToDate ~ PctChildPoverty+PctFamilyPoverty+ log_enrolled+log_TotalSchools , data=copy_district, posterior=TRUE, iterations= 10000)
+summary(LM_up_to_date_Bayes)
+
+check_list_2 <- 1 - (LM_up_to_date_Bayes[,"sig2"] / var(copy_district$asin_PCTUpToDate) )
+mean(check_list_2)
+quantile(check_list_2, c(0.025,0.975))
+hist(check_list_2, main=NULL)
+abline(v=quantile(check_list_2,c(0.025,0.975)), col="red")
+
+```
+
+_The P-value for above regression is less than alpha threshold and hence it is statistically significant. However, the adjusted R Square value is low at 0.1465.  So, only 14% of the variability of enrolled students is explained by this variables._
+
+_Results from Bayesian approach favored the results from frequentest approach. Predictors are unable to explain variability in the percent of enrolled students. Among, these predictors log_enrolled seems to be the good predictor._  
+
+
+### c. _Using any set or combination of predictors that you want to use, what’s the best R-squared you can achieve in predicting the percentage of all enrolled students with completely up-to-date vaccines while still having an acceptable regression?_
+```{r}
+LM_All_combi <-lm(asin_PCTUpToDate ~ asin_WithDTP+asin_WithMMR+PctBeliefExempt, data=copy_district)
+summary(LM_All_combi)
+plot(LM_All_combi, which= 1)
+
+LM_All_combi_Bayes <- lmBF(asin_PCTUpToDate ~ asin_WithDTP+asin_WithMMR+PctBeliefExempt, data=copy_district, posterior=TRUE, iterations=10000) 
+summary(LM_All_combi_Bayes)
+check_list3 <- 1 - (LM_All_combi_Bayes[,"sig2"] / var(copy_district$asin_PCTUpToDate))
+mean(check_list3)
+quantile(check_list3, c(0.025,0.975))
+hist(check_list3, main=NULL)
+abline(v=quantile(check_list3,c(0.025,0.975)), col="red")
+
+```
+
+_The P-value for above regression is less than alpha threshold and hence it is statistically significant. However, the adjusted R Square value is high at 0.9585.  So, about 95% of the variability of enrolled students is explained by this variables._
+
+_Results from Bayesian approach favored the results and hence the test is statistically significant. So, we can infer that enrolled students are affected and can be predicted by these variables._  
+
+
+### d. _In predicting the percentage of all enrolled students with completely up-to-date vaccines, is there an interaction between PctChildPoverty and Enrolled? If so, interpret the interaction term._
+```{r}
+LM_interaction <-lm(asin_PCTUpToDate ~ asin_WithDTP+asin_WithMMR+PctBeliefExempt+PctChildPoverty*log_enrolled, data=copy_district) 
+summary(LM_interaction)
+plot(LM_interaction, which= 2)
+
+LM_interaction_Bayes <- lmBF(asin_PCTUpToDate ~ asin_WithDTP+asin_WithMMR+PctBeliefExempt+PctChildPoverty*log_enrolled, data=copy_district, posterior=TRUE
+, iterations=10000) 
+summary(LM_interaction_Bayes)
+
+check_list4 <- 1 - (LM_interaction_Bayes[,"sig2"] / var(copy_district$asin_PCTUpToDate))
+mean(check_list4)
+quantile(check_list4, c(0.025,0.975))
+hist(check_list4, main=NULL) 
+abline(v=quantile(check_list4,c(0.025,0.975)), col="red")
+```
+
+_The R-squared on adding an interaction variable of child poverty and students enrolled does not change from the previous one. And both frequentist and Bayesian approach indicate that some of the variables are not statistically significant in predicting the up to date vaccination rate._
+
+_Also, It can be seen that the odds ratio is favoring the model with interaction term in it. However, the ratio is very weak according to the rule of thumb provided by Kass and Raftery (Ratio is below 3). Hence, it is safe to say that interactions is not having any effect on the model and it aligns with our result from significance tests._
+
+### e. _Which, if any, of the four predictor variables predict whether or not a district’s reporting was complete?_
+```{r}
+logistic <- glm(DistrictComplete ~ PctChildPoverty+PctFamilyPoverty+Enrolled+TotalSchools, data=copy_district, family=binomial())
+summary(logistic)
+exp(coef(logistic))
+anova(logistic, test="Chisq")
+
+```
+
+_Looking at the p-values of the variables only enrolled and Total Schools are statistically significant. The distribution is slightly negatively skewed as the median of the residuals is slightly positive._
+_The chi square of Percent Family Poverty is not significant, this is what we got in our logistic model as well. The factor Percent child poverty seems significant, which does not align with our logistic regression model._
+
+```{r}
+logistic_bayes <- MCMClogit(DistrictComplete ~ PctChildPoverty+PctFamilyPoverty+Enrolled+TotalSchools, data = copy_district)
+summary(logistic_bayes)
+
+log_odds <- as.matrix(logistic_bayes[,"Enrolled"])
+odds<- apply(log_odds,1,exp)
+hist(odds) 
+abline(v=quantile(odds,c(0.025)),col="red")
+abline(v=quantile(odds,c(0.975)),col="red")
+```
+
+_The histogram indicates that increase in enrolled students means that the reporting is more likely to be complete. The odds are around 1.002 which are weak odds, therefore the enrolled students does not give much of an information about the reporting being complete or not._
+
+```{r}
+log_odds_school <- as.matrix(logistic_bayes[,"TotalSchools"])
+odds_school <- apply(log_odds_school,1,exp)
+hist(odds_school)  
+abline(v=quantile(odds_school,c(0.025)),col="red")
+abline(v=quantile(odds_school,c(0.975)),col="red")
+```
+
+_The histogram of schools odds indicates that increase in schools in the district means that the reporting is more likely to be incomplete. The odds are around 0.80 which are weak odds against, therefore the number of schools does not give much of an information about the reporting being complete or not._
+
+
+## 7.	_Concluding Paragraph_
+
+_Describe your conclusions, based on all of the foregoing analyses. As well, the staff member in the state legislator’s office is interested to know how to allocate financial assistance to school districts to improve both their vaccination rates and their reporting compliance. Make sure you have at least one sentence that makes a recommendation about improving vaccination rates. Make sure you have at least one sentence that makes a recommendation about improving reporting rates. Finally, say what further analyses might be helpful to answer these questions and any additional data you would like to have. _
+
+_The factors like the poverty rate of the children and their families does not seem to contribute to the overall rate of the vaccination. Rather the likelihood of a student being up to date with all the vaccines goes up if he/she are vaccinated against MCV or DTP. It means increasing awareness regarding vaccinations will be a determining factor in driving the rate of vaccination up._ 
