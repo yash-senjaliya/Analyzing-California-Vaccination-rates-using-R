@@ -1,1 +1,2 @@
-# California-Vaccination
+### California-Vaccination
+This analysis aims to compare vaccination rate in USA to the vaccination rate of sample collected in california schools in recent years. It aims to understand whether a significant change is observed between vaccination rates in USA and in california schools. We try to understand whether the given factors available in dataset can explain the difference in vaccination rates within counties, if observed.
